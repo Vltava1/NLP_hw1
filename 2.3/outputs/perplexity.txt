@@ -1,0 +1,25 @@
+# Perplexity Analysis
+
+Original paragraph:
+
+Large language models have transformed natural language processing. They learn from vast corpora and
+can perform a surprising variety of tasks. However, they sometimes hallucinate facts and require
+careful evaluation. Researchers continue to study their limitations and opportunities. Responsible
+deployment is crucial for real-world applications.
+
+Tokens: 56, PPL: 82.00
+
+
+Shuffled paragraph:
+
+variety However, and from sometimes learn careful to corpora have study transformed applications.
+hallucinate vast continue and Responsible deployment evaluation. and facts tasks. they Researchers
+crucial Large of a real-world opportunities. limitations for models require natural their language
+They can perform surprising language processing. is
+
+Tokens: 57, PPL: 2780.05
+
+
+ΔPPL = 2698.05 (shuffle/original = 33.90x)
+
+Comment: Shuffling breaks syntax/semantics, so PPL increases.

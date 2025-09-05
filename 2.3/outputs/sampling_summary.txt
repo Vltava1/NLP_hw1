@@ -1,0 +1,45 @@
+# Sampling Comparison
+
+Prompt: 'Once upon a time'
+
+## Greedy (T=0)
+
+- Distinct-1: 0.040, Distinct-2: 0.047
+
+- Saved: outputs/gen_greedy.txt
+
+## T=1e-06
+
+- Distinct-1: 0.040, Distinct-2: 0.047
+
+- Saved: outputs/gen_T1e-06.txt
+
+## T=0.3
+
+- Distinct-1: 0.198, Distinct-2: 0.232
+
+- Saved: outputs/gen_T0p3.txt
+
+## T=0.6
+
+- Distinct-1: 0.683, Distinct-2: 0.850
+
+- Saved: outputs/gen_T0p6.txt
+
+## T=0.9
+
+- Distinct-1: 0.545, Distinct-2: 0.878
+
+- Saved: outputs/gen_T0p9.txt
+
+## T=1.2
+
+- Distinct-1: 0.733, Distinct-2: 0.931
+
+- Saved: outputs/gen_T1p2.txt
+
+## T=1.5
+
+- Distinct-1: 0.709, Distinct-2: 0.922
+
+- Saved: outputs/gen_T1p5.txt

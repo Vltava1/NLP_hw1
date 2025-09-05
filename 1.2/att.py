@@ -1,27 +1,27 @@
 # profile_attention_cpu_gpu_savefig.py
-# Satisfies: FLOPs, memory, time; L in {10,100,1k,10k}; SEM error bars; CPU & GPU; save plots.
+# 使用 psutil 测量 CPU 内存
 
-import math, time, gc, sys, traceback
+import math, time, gc, sys, traceback, os
 import numpy as np
 import torch
 import torch.nn as nn
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import tracemalloc
 from dataclasses import dataclass
+import psutil   # ✅ 新增
 
 # ---------------- basic config ----------------
 D_MODEL   = 128
 N_HEADS   = 8
 BATCH     = 1
 DTYPE     = torch.float32
-L_LIST    = [10, 100, 1_000, 10_000]   # reduce 10_000 if your machine OOMs
-N_TRIALS  = 8                           # averaging for smaller SEM
-WARMUP    = 2                           # throwaway forward passes for timing stability
+L_LIST    = [10, 100, 1_000, 10_000]   # reduce if OOM
+N_TRIALS  = 8
+WARMUP    = 2
 
 # -------------- FLOPs (analytical) --------------
 def flops_self_attention(L, d_model, n_heads):
-    # Multiply+add counted as 2 FLOPs; common estimate:
-    # total ≈ 8 L d^2 + 4 L^2 d + 5 H L^2
     d = d_model
     return int(8*L*d*d + 4*(L**2)*d + 5*n_heads*(L**2))
 
@@ -43,16 +43,18 @@ def clear_memory():
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
 
+# ✅ 改进：使用 psutil 测量 CPU 内存
 def measure_once_cpu(mha, L):
-    x = torch.randn(BATCH, L, D_MODEL, dtype=DTYPE)
-    tracemalloc.start()
+    process = psutil.Process(os.getpid())
+    mem_before = process.memory_info().rss  # 进程常驻内存
     t0 = time.perf_counter()
     with torch.no_grad():
+        x = torch.randn(BATCH, L, D_MODEL, dtype=DTYPE)
         y, _ = mha(x, x, x)
     t1 = time.perf_counter()
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    return (t1 - t0), float(peak)
+    mem_after = process.memory_info().rss
+    peak_bytes = max(mem_before, mem_after) - mem_before
+    return (t1 - t0), float(max(peak_bytes, 0))
 
 def measure_once_gpu(mha, L, device):
     x = torch.randn(BATCH, L, D_MODEL, dtype=DTYPE, device=device)
@@ -91,7 +93,6 @@ def run_trials(device):
                 times.append(t); mems.append(m)
                 flps.append(flops_self_attention(L, D_MODEL, N_HEADS))
             except RuntimeError as e:
-                # Likely OOM for this L on this device
                 sys.stderr.write(f"[WARN] {device} L={L}: {repr(e)}\n")
                 ok = False
                 break
@@ -105,7 +106,7 @@ def run_trials(device):
             results[L] = {
                 "time":  mean_sem(times),
                 "mem":   mean_sem(mems),
-                "flops": mean_sem(flps),  # deterministic per L (SEM≈0)
+                "flops": mean_sem(flps),
             }
         else:
             results[L] = {
@@ -123,6 +124,7 @@ def plot_and_save(lengths, vals, errs, title, ylabel, fname):
     plt.title(title); plt.grid(True, which='both', ls='--', alpha=0.4)
     plt.tight_layout()
     plt.savefig(fname, dpi=160)
+    plt.close()
     print(f"Saved: {fname}")
 
 def summarize_print(device_name, results):
@@ -144,24 +146,20 @@ def main():
         res = run_trials(dev)
         summarize_print(dev_name, res)
 
-        # vectors for plotting (skip NaNs if any L was OOM)
         Ls      = [L for L in L_LIST if not math.isnan(res[L]["time"].mean)]
         t_means = [res[L]["time"].mean  for L in Ls]
         t_sems  = [res[L]["time"].sem   for L in Ls]
         m_means = [res[L]["mem"].mean   for L in Ls]
         m_sems  = [res[L]["mem"].sem    for L in Ls]
         f_means = [res[L]["flops"].mean for L in Ls]
-        f_sems  = [res[L]["flops"].sem  for L in Ls]  # ~0
+        f_sems  = [res[L]["flops"].sem  for L in Ls]
 
-        # save figures locally
         plot_and_save(Ls, t_means, t_sems, f"Wall Time vs L ({dev_name}, MHA)", "Seconds",
                       f"time_vs_L_{dev.type}.png")
         plot_and_save(Ls, m_means, m_sems, f"Peak Memory vs L ({dev_name}, MHA)", "Bytes",
                       f"memory_vs_L_{dev.type}.png")
         plot_and_save(Ls, f_means, f_sems, f"FLOPs (Analytical) vs L ({dev_name})", "FLOPs",
                       f"flops_vs_L_{dev.type}.png")
-
-    plt.show()
 
 if __name__ == "__main__":
     torch.manual_seed(0)
